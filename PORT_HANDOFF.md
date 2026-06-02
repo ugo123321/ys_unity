@@ -2,6 +2,13 @@
 
 > 这是一份**活文档**。每完成一小步就更新。任何中断的会话，下一个 Claude 都可以读完本文件后无缝续接。
 
+## 工程路径（2026-06-02 迁移后）
+
+- **Unity 工程**：`D:\workspace\godot1\unityproject\ys_unity\`
+- **Godot 源（参考）**：`D:\workspace\godot1\rzz_godot\`
+- **美术源文件**：`D:\workspace\godot1\sucai\`
+- **旧路径**：`D:\workspace\godot1\unityproject\ys\` — **已废弃，不要再用，所有改动都在 `ys_unity\`**
+
 ---
 
 ## 当前状态
@@ -253,6 +260,12 @@
 - ✅ PauseMenu 5 字段（_root/_resumeButton/_restartButton/_mainMenuButton/_battle）全部 Inspector 连线；Hud._pauseMenu 与 BattleController._pauseMenu 也连上
 - ✅ 端到端验证：`pm.Show()` → IsVisible=True, State=Paused, Time.timeScale=0；`pm.Hide()` → IsVisible=False, State=Playing, Time.timeScale=1（Restart/MainMenu 走 GameFlowController.RestartCurrentScene/LoadMain，需手动点验证）
 
+### Phase 2.3+ 触发圈可视化 ✅ 完成（2026-06-02）
+- 背景：玩家反馈"拖鼠标没反应、提示 outside trigger radius"——原因是 PathInput 要求**鼠标按下在玩家身周 ~65px 半径圆内**才能起手画线，Godot 原版 player.gd `_draw()` 画一圈白+黄环视觉提示，Phase 1 没移植。
+- ✅ `Assets/Scripts/UI/PlayerTriggerRing.cs` — LineRenderer 圆环 48 段，KI 满+Idle 时 fade in 显示，否则 fade out。SerializeField：`_player`、`_segments=48`、`_fadeInSpeed=4`、`_fadeOutSpeed=6`、`_radiusScale=0.5`（圈视觉缩小一半避免喧宾夺主，真实判定半径 1.0×）、`_centerOffset=(0,78)`（向上偏移补正 sprite pivot 不在中心）
+- ✅ Battle.unity `/BattleRoot/TriggerRing` 节点（**注意：放在 BattleRoot 而非 Player 子节点**，避开 Player 的 scale=2 干扰；LineRenderer.useWorldSpace=true，圆心 = `_player.HomePosition + _centerOffset` 每帧锁定）+ LineRenderer + PlayerTriggerRing 组件，`_player` 字段连到 Player GameObject
+- ✅ 端到端验证：截图确认圆牢牢套在玩家身体上，半径约 33px（GetTriggerRadius×0.5），玩家移动/HomePosition 更新后圆心同步
+
 ### Build Settings ✅
 - ✅ EditorBuildSettings 现在含 `Assets/Scenes/Main.unity` (idx 0) + `Assets/Scenes/Battle.unity` (idx 1)，之前是空的，导致 LoadBattle 静默失败
 
@@ -350,6 +363,18 @@ execute_code: var b=Object.FindObjectOfType<Rzz.Battle.BattleController>(); b.Ex
 - **修复**：（1）`cam.tag = "MainCamera"` + SetDirty + SaveScene，Main.unity 和 Battle.unity 都改；（2）反射重建 "Portrait 720x1280" 自定义 Size 并通过 `gameView.set_selectedSizeIndex(idx)` 选中。
 - **预防**：若再看到"黑屏只剩玩家"，第一时间检查 `cam.tag` + Game View 顶部下拉确认是 720x1280 portrait（不是 Free Aspect / 16:9）。
 - **附加注意**：截图工具 manage_camera screenshot 按 Game View 当前窗口尺寸渲染。Game 窗口若被拖到 ~150x270 这种迷你尺寸，PPU=1 的 sprite 渲染出来只占几个像素几乎看不见。**Unity 编辑器的 Game 窗口要拖大** 才能正常观察。
+
+### 2026-06-02 · 触发圈位置偏离玩家（sprite pivot + 父节点 scale 双重坑）
+- **现象**：在 Player 子节点下建 LineRenderer 圆环，圆显示在玩家正下方很远，不在玩家身上。
+- **原因 1**：Player 的 localScale=(2,2,1)，LineRenderer useWorldSpace=false 时点位置受父节点 scale 影响；改 useWorldSpace=true 在 Unity 2022 上仍可能受 Transform 干扰（边界情况）。
+- **原因 2**：Player 的 Aseprite-imported sprite pivot 不在中心（精灵 bounds.localCenter.y=50.5），所以 transform.position 实际位于精灵下方约 80px，圆心用 transform.position 直接画就会画在精灵下方。
+- **修复**：（1）TriggerRing 节点放在 BattleRoot 下（不是 Player 子），彻底脱离 Player 的 transform；（2）LineRenderer useWorldSpace=true 用绝对世界坐标 SetPosition；（3）`_centerOffset.y = 78f` 把圆心向上推到精灵视觉中心。
+- **教训**：以后要"跟随某个 GameObject 的视觉位置"的 UI/Gizmo，**首选用 sprite renderer.bounds.center**（而不是 transform.position），或者直接放在场景根级用脚本每帧 LateUpdate 锁定目标位置。
+
+### 2026-06-02 · 项目路径迁移：unityproject/ys → unityproject/ys_unity
+- **变更**：Unity 工程整体从 `D:\workspace\godot1\unityproject\ys\` 挪到 `D:\workspace\godot1\unityproject\ys_unity\`。
+- **影响**：所有 MCP 操作、Library/缓存路径、Unity Hub 注册项都指向新路径。`PORT_HANDOFF.md` 内文档里所有"Assets/..."这种**项目内相对路径无需改**；旧路径绝对引用（极少）已废弃。
+- **续接 Claude 注意**：开工前确认 `mcpforunity://instances` 返回的 Unity 实例 project 路径是 `ys_unity`；如果还是 `ys`，让用户切实例。
 
 ---
 
